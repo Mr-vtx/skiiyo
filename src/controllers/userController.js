@@ -7,13 +7,17 @@ import { getPagination } from "../utils/validate.js";
 export const userController = {
   // GET /api/v1/user/profile
   async getProfile(request, reply) {
-    const user = await userService.getProfile(request.user.id);
+    const user = await userService.getProfile(request.user.id, request.project._id);
     return success(reply, { user });
   },
 
   // PATCH /api/v1/user/profile
   async updateProfile(request, reply) {
-    const user = await userService.updateProfile(request.user.id, request.body);
+    const user = await userService.updateProfile(
+      request.user.id,
+      request.project._id,
+      request.body,
+    );
     return success(reply, { user }, "Profile updated");
   },
 
@@ -21,6 +25,7 @@ export const userController = {
   async updateSettings(request, reply) {
     const user = await userService.updateSettings(
       request.user.id,
+      request.project._id,
       request.body,
     );
     return success(reply, { user }, "Settings updated");
@@ -55,7 +60,11 @@ export const userController = {
 
   // POST /api/v1/user/fcm-token
   async registerFCMToken(request, reply) {
-    await userService.registerFCMToken(request.user.id, request.body.token);
+    await userService.registerFCMToken(
+      request.user.id,
+      request.project._id,
+      request.body.token,
+    );
     return success(reply, {}, "Device registered for notifications");
   },
 };

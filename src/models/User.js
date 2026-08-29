@@ -5,10 +5,14 @@ import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema(
   {
+    project: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      required: true,
+    },
     username: {
       type: String,
       required: [true, "Username is required"],
-      unique: true,
       trim: true,
       minlength: [4, "Username must be at least 4 characters"],
       maxlength: [30, "Username cannot exceed 30 characters"],
@@ -20,7 +24,6 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: [true, "Email is required"],
-      unique: true,
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
@@ -43,7 +46,6 @@ const userSchema = new mongoose.Schema(
     googleId: {
       type: String,
       default: null,
-      sparse: true,
     },
     refreshToken: {
       type: String,
@@ -84,6 +86,12 @@ const userSchema = new mongoose.Schema(
 
 
 userSchema.index({ country: 1 });
+userSchema.index({ project: 1, email: 1 }, { unique: true });
+userSchema.index({ project: 1, username: 1 }, { unique: true });
+userSchema.index(
+  { project: 1, googleId: 1 },
+  { unique: true, sparse: true }, // sparse: password-only users have no googleId
+);
 
 userSchema.pre("save", async function () {
   if (!this.isModified("password") || !this.password) return;

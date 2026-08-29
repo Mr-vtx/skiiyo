@@ -6,14 +6,14 @@ import { cache, TTL } from "../config/redis.js";
 import { sanitize } from "../utils/validate.js";
 
 export const userService = {
-  async getProfile(userId) {
-    const user = await User.findById(userId);
+  async getProfile(userId, project) {
+    const user = await User.findOne({ _id: userId, project });
     if (!user)
       throw Object.assign(new Error("User not found"), { statusCode: 404 });
     return user.toSafeObject();
   },
 
-  async updateProfile(userId, updates) {
+  async updateProfile(userId, project, updates) {
     const allowed = [
       "username",
       "bio",
@@ -35,6 +35,7 @@ export const userService = {
 
     if (clean.username) {
       const exists = await User.findOne({
+        project,
         username: clean.username,
         _id: { $ne: userId },
       });
@@ -44,18 +45,19 @@ export const userService = {
         });
     }
 
-    const user = await User.findByIdAndUpdate(userId, clean, {
-      new: true,
-      runValidators: true,
-    });
+    const user = await User.findOneAndUpdate(
+      { _id: userId, project },
+      clean,
+      { new: true, runValidators: true },
+    );
     if (!user)
       throw Object.assign(new Error("User not found"), { statusCode: 404 });
     return user.toSafeObject();
   },
 
-  async updateSettings(userId, settings) {
-    const user = await User.findByIdAndUpdate(
-      userId,
+  async updateSettings(userId, project, settings) {
+    const user = await User.findOneAndUpdate(
+      { _id: userId, project },
       { $set: { settings } },
       { new: true, runValidators: true },
     );
@@ -85,9 +87,10 @@ export const userService = {
     await Notification.findOneAndDelete({ _id: notificationId, userId });
   },
 
-  async registerFCMToken(userId, token) {
-    await User.findByIdAndUpdate(userId, {
-      $addToSet: { fcmTokens: token },
-    });
+  async registerFCMToken(userId, project, token) {
+    await User.findOneAndUpdate(
+      { _id: userId, project },
+      { $addToSet: { fcmTokens: token } },
+    );
   },
 };
