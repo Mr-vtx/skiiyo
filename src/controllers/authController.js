@@ -13,7 +13,8 @@ export const authController = {
       email: sanitize(email),
       password,
       dateOfBirth: dateOfBirth ?? null,
-      geo: request.geo, 
+      geo: request.geo,
+      project: request.project._id,
     });
 
     return success(reply, data, "Account created successfully", 201);
@@ -27,6 +28,7 @@ export const authController = {
       email: sanitize(email),
       password,
       geo: request.geo,
+      project: request.project._id,
     });
 
     return success(reply, data, "Signed in successfully");
@@ -34,14 +36,12 @@ export const authController = {
 
   // POST /api/v1/auth/google
   async google(request, reply) {
-    const { googleId, email, username, avatar } = request.body;
+    const { idToken } = request.body;
 
     const data = await authService.googleAuth({
-      googleId,
-      email: sanitize(email),
-      username: username ? sanitize(username) : null,
-      avatar: avatar ?? null,
+      idToken,
       geo: request.geo,
+      project: request.project._id,
     });
 
     return success(reply, data, "Signed in with Google");
@@ -50,20 +50,20 @@ export const authController = {
   // POST /api/v1/auth/refresh
   async refresh(request, reply) {
     const { refreshToken } = request.body;
-    const tokens = await authService.refresh(refreshToken);
+    const tokens = await authService.refresh(refreshToken, request.project._id);
     return success(reply, tokens, "Tokens refreshed");
   },
 
   // POST /api/v1/auth/logout
   async logout(request, reply) {
-    await authService.logout(request.user.id);
+    await authService.logout(request.user.id, request.project._id);
     return success(reply, {}, "Signed out successfully");
   },
 
   // POST /api/v1/auth/forgot-password
   async forgotPassword(request, reply) {
     const { email } = request.body;
-    await authService.forgotPassword(sanitize(email));
+    await authService.forgotPassword(sanitize(email), request.project._id);
     // Always return success — don't reveal if email exists
     return success(
       reply,
@@ -75,13 +75,17 @@ export const authController = {
   // POST /api/v1/auth/reset-password
   async resetPassword(request, reply) {
     const { token, newPassword } = request.body;
-    await authService.resetPassword({ token, newPassword });
+    await authService.resetPassword({
+      token,
+      newPassword,
+      project: request.project._id,
+    });
     return success(reply, {}, "Password reset successfully — please sign in");
   },
 
   // GET /api/v1/auth/me
   async getMe(request, reply) {
-    const user = await authService.getMe(request.user.id);
+    const user = await authService.getMe(request.user.id, request.project._id);
     return success(reply, { user }, "Profile fetched");
   },
 };

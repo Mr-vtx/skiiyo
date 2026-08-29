@@ -1,15 +1,62 @@
 "use strict";
 
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import User from "../models/User.js";
 import { generateTokens, verifyRefreshToken } from "../middleware/auth.js";
 import { emailService } from "./emailService.js";
 import { cache } from "../config/redis.js";
+import { hashToken } from "../utils/crypto.js";
+
+const googleClient = process.env.GOOGLE_CLIENT_ID
+  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+  : null;
+
+async function verifyGoogleToken(idToken) {
+  if (!googleClient) {
+    throw Object.assign(
+      new Error("Google sign-in is not configured on this server"),
+      { statusCode: 503 },
+    );
+  }
+
+  let ticket;
+  try {
+    ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+  } catch {
+    throw Object.assign(new Error("Invalid Google token"), {
+      statusCode: 401,
+    });
+  }
+
+  const payload = ticket.getPayload();
+  if (!payload?.email) {
+    throw Object.assign(new Error("Invalid Google token"), {
+      statusCode: 401,
+    });
+  }
+  if (!payload.email_verified) {
+    throw Object.assign(new Error("Google email is not verified"), {
+      statusCode: 401,
+    });
+  }
+
+  return {
+    googleId: payload.sub,
+    email: payload.email,
+    username: payload.name ?? null,
+    avatar: payload.picture ?? null,
+  };
+}
 
 export const authService = {
   // ==== Register ====================================
-  async register({ username, email, password, dateOfBirth, geo }) {
+  async register({ username, email, password, dateOfBirth, geo, project }) {
     const exists = await User.findOne({
+      project,
       $or: [
         { email: email.toLowerCase() },
         { username: username.toLowerCase() },
@@ -24,6 +71,7 @@ export const authService = {
     }
 
     const user = await User.create({
+      project,
       username,
       email,
       password,
@@ -36,12 +84,15 @@ export const authService = {
       }),
     });
 
-    const tokens = generateTokens({ id: user._id, role: user.role });
+    const tokens = generateTokens({
+      id: user._id,
+      role: user.role,
+      project: String(project),
+    });
 
-    user.refreshToken = tokens.refreshToken;
+    user.refreshToken = hashToken(tokens.refreshToken);
     await user.save({ validateBeforeSave: false });
 
-    // ✅ Optional email (non-blocking)
     emailService
       .sendWelcome({ email: user.email, username: user.username })
       .catch(() => {});
@@ -50,10 +101,11 @@ export const authService = {
   },
 
   // ==== Login ====================================
-  async login({ email, password, geo }) {
-    const user = await User.findOne({ email: email.toLowerCase() }).select(
-      "+password +refreshToken",
-    );
+  async login({ email, password, geo, project }) {
+    const user = await User.findOne({
+      project,
+      email: email.toLowerCase(),
+    }).select("+password +refreshToken");
 
     if (!user || !user.password) {
       throw Object.assign(new Error("Invalid email or password"), {
@@ -74,9 +126,13 @@ export const authService = {
       });
     }
 
-    const tokens = generateTokens({ id: user._id, role: user.role });
+    const tokens = generateTokens({
+      id: user._id,
+      role: user.role,
+      project: String(project),
+    });
 
-    user.refreshToken = tokens.refreshToken;
+    user.refreshToken = hashToken(tokens.refreshToken);
     user.lastSeen = new Date();
 
     if (geo?.country) {
@@ -90,11 +146,18 @@ export const authService = {
   },
 
   // ==== Google OAuth ====================================
-  async googleAuth({ googleId, email, username, avatar, geo }) {
-    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+  async googleAuth({ idToken, geo, project }) {
+    const { googleId, email, username, avatar } =
+      await verifyGoogleToken(idToken);
+
+    let user = await User.findOne({
+      project,
+      $or: [{ googleId }, { email }],
+    });
 
     if (!user) {
       user = await User.create({
+        project,
         googleId,
         email,
         username: username ?? email.split("@")[0],
@@ -115,16 +178,20 @@ export const authService = {
       user.lastSeen = new Date();
     }
 
-    const tokens = generateTokens({ id: user._id, role: user.role });
+    const tokens = generateTokens({
+      id: user._id,
+      role: user.role,
+      project: String(project),
+    });
 
-    user.refreshToken = tokens.refreshToken;
+    user.refreshToken = hashToken(tokens.refreshToken);
     await user.save({ validateBeforeSave: false });
 
     return { user: user.toSafeObject(), ...tokens };
   },
 
   // ==== Refresh token ====================================
-  async refresh(refreshToken) {
+  async refresh(refreshToken, project) {
     if (!refreshToken) {
       throw Object.assign(new Error("Refresh token required"), {
         statusCode: 401,
@@ -132,42 +199,49 @@ export const authService = {
     }
 
     const payload = verifyRefreshToken(refreshToken);
-    if (!payload) {
+    if (!payload || payload.project !== String(project)) {
       throw Object.assign(new Error("Invalid or expired refresh token"), {
         statusCode: 401,
       });
     }
 
-    const user = await User.findById(payload.id).select("+refreshToken");
+    const user = await User.findOne({
+      _id: payload.id,
+      project,
+    }).select("+refreshToken");
 
-    if (!user || user.refreshToken !== refreshToken) {
+    if (!user || user.refreshToken !== hashToken(refreshToken)) {
       throw Object.assign(
         new Error("Refresh token reuse detected — please sign in again"),
         { statusCode: 401 },
       );
     }
 
-    const tokens = generateTokens({ id: user._id, role: user.role });
+    const tokens = generateTokens({
+      id: user._id,
+      role: user.role,
+      project: String(project),
+    });
 
-    user.refreshToken = tokens.refreshToken;
+    user.refreshToken = hashToken(tokens.refreshToken);
     await user.save({ validateBeforeSave: false });
 
     return tokens;
   },
 
   // ==== Logout ====================================
-  async logout(userId) {
-    await User.findByIdAndUpdate(userId, { refreshToken: null });
+  async logout(userId, project) {
+    await User.findOneAndUpdate({ _id: userId, project }, { refreshToken: null });
     await cache.del(`session:${userId}`);
   },
 
   // ==== Forgot password ====================================
-  async forgotPassword(email) {
-    const user = await User.findOne({ email: email.toLowerCase() });
+  async forgotPassword(email, project) {
+    const user = await User.findOne({ project, email: email.toLowerCase() });
     if (!user) return;
 
     const token = crypto.randomBytes(32).toString("hex");
-    const hashed = crypto.createHash("sha256").update(token).digest("hex");
+    const hashed = hashToken(token);
 
     user.passwordResetToken = hashed;
     user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
@@ -182,10 +256,11 @@ export const authService = {
   },
 
   // ==== Reset password =====================================
-  async resetPassword({ token, newPassword }) {
-    const hashed = crypto.createHash("sha256").update(token).digest("hex");
+  async resetPassword({ token, newPassword, project }) {
+    const hashed = hashToken(token);
 
     const user = await User.findOne({
+      project,
       passwordResetToken: hashed,
       passwordResetExpires: { $gt: Date.now() },
     }).select("+passwordResetToken +passwordResetExpires");
@@ -205,8 +280,8 @@ export const authService = {
   },
 
   // ==== Get current user ====================================
-  async getMe(userId) {
-    const user = await User.findById(userId);
+  async getMe(userId, project) {
+    const user = await User.findOne({ _id: userId, project });
 
     if (!user) {
       throw Object.assign(new Error("User not found"), {

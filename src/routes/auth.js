@@ -54,12 +54,9 @@ export default async function authRoutes(app) {
       schema: {
         body: {
           type: "object",
-          required: ["googleId", "email"],
+          required: ["idToken"],
           properties: {
-            googleId: { type: "string" },
-            email: { type: "string", format: "email" },
-            username: { type: "string", nullable: true },
-            avatar: { type: "string", nullable: true },
+            idToken: { type: "string" },
           },
           additionalProperties: false,
         },
