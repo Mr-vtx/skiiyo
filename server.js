@@ -8,23 +8,43 @@ dotenv.config();
 const PORT = parseInt(process.env.PORT ?? "8000");
 const HOST = "0.0.0.0";
 
+let appInstance;
+let shuttingDown = false;
+
 async function start() {
-  const app = await buildApp();
+  appInstance = await buildApp();
   try {
-    await app.listen({ port: PORT, host: HOST });
-    app.log.info(`fastify-production-starter API running on http://${HOST}:${PORT}`);
-    app.log.info(`Environment: ${process.env.NODE_ENV}`);
+    await appInstance.listen({ port: PORT, host: HOST });
+    appInstance.log.info(`Skiiyo API running on http://${HOST}:${PORT}`);
+    appInstance.log.info(`Environment: ${process.env.NODE_ENV}`);
   } catch (err) {
-    app.log.error(err);
+    appInstance.log.error(err);
     process.exit(1);
   }
 }
 
 // ─── Graceful shutdown ────────────────────────────────────
-process.on("SIGTERM", async () => {
-  const app = await buildApp();
-  await app.close();
-  process.exit(0);
-});
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  if (!appInstance) {
+    process.exit(0);
+    return;
+  }
+
+  appInstance.log.info(`${signal} received, shutting down gracefully...`);
+  try {
+    await appInstance.close();
+    appInstance.log.info("Shutdown complete");
+    process.exit(0);
+  } catch (err) {
+    appInstance.log.error(err, "Error during shutdown");
+    process.exit(1);
+  }
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 start();
