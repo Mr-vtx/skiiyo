@@ -5,7 +5,6 @@ import { success, paginated } from "../utils/response.js";
 import { getPagination, sanitize } from "../utils/validate.js";
 import { cache } from "../config/redis.js";
 import cloudinary, { uploadImage, deleteImage } from "../config/cloudinary.js";
-import slugify from "slugify";
 
 export default async function adminRoutes(app) {
   app.addHook("preHandler", adminOnly);
