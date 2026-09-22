@@ -90,14 +90,46 @@ export const authService = {
       project: String(project),
     });
 
+    const verifyToken = crypto.randomBytes(32).toString("hex");
     user.refreshToken = hashToken(tokens.refreshToken);
+    user.emailVerificationToken = hashToken(verifyToken);
+    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await user.save({ validateBeforeSave: false });
 
     emailService
       .sendWelcome({ email: user.email, username: user.username })
       .catch(() => {});
+    emailService
+      .sendVerification({ email: user.email, username: user.username, verifyToken })
+      .catch(() => {});
 
     return { user: user.toSafeObject(), ...tokens };
+  },
+
+  // ==== Verify email ====================================
+  // Note: this does not block login — isEmailVerified is informational
+  // only unless you add a check for it in login(). Kept that way here
+  // since enforcing it is a product decision, not a plumbing one.
+  async verifyEmail(token, project) {
+    const hashed = hashToken(token);
+
+    const user = await User.findOne({
+      project,
+      emailVerificationToken: hashed,
+      emailVerificationExpires: { $gt: Date.now() },
+    }).select("+emailVerificationToken +emailVerificationExpires");
+
+    if (!user) {
+      throw Object.assign(
+        new Error("Invalid or expired verification link"),
+        { statusCode: 400 },
+      );
+    }
+
+    user.isEmailVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpires = null;
+    await user.save({ validateBeforeSave: false });
   },
 
   // ==== Login ====================================

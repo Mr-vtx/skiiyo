@@ -1,8 +1,10 @@
 "use strict";
 
 import { userService } from "../services/userService.js";
-import { success, paginated } from "../utils/response.js";
+import { success, error, paginated } from "../utils/response.js";
 import { getPagination } from "../utils/validate.js";
+
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export const userController = {
   // GET /api/v1/user/profile
@@ -19,6 +21,25 @@ export const userController = {
       request.body,
     );
     return success(reply, { user }, "Profile updated");
+  },
+
+  // POST /api/v1/user/avatar (multipart/form-data, field name "avatar")
+  async uploadAvatar(request, reply) {
+    const file = await request.file();
+    if (!file) {
+      return error(reply, "No file uploaded — send it as multipart/form-data", 400);
+    }
+    if (!ALLOWED_IMAGE_TYPES.has(file.mimetype)) {
+      return error(reply, "Only JPEG, PNG, or WebP images are allowed", 400);
+    }
+
+    const buffer = await file.toBuffer();
+    const user = await userService.updateAvatar(
+      request.user.id,
+      request.project._id,
+      buffer,
+    );
+    return success(reply, { user }, "Avatar updated");
   },
 
   // PATCH /api/v1/user/settings

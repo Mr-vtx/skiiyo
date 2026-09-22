@@ -129,6 +129,24 @@ export default async function authRoutes(app) {
     authController.resetPassword,
   );
 
+  // ==== Verify email ================================================
+  app.post(
+    "/verify-email",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["token"],
+          properties: {
+            token: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    authController.verifyEmail,
+  );
+
   // ==== Get current user ================================================
   app.get(
     "/me",

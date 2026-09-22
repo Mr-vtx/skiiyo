@@ -37,6 +37,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Cloudinary public_id for the current avatar, so we can delete the old
+    // image when a new one is uploaded. Not user-editable directly.
+    avatarPublicId: {
+      type: String,
+      default: null,
+      select: false,
+    },
     role: {
       type: String,
       enum: ["user", "admin"],
@@ -56,9 +63,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    emailVerificationToken: { type: String, select: false, default: null },
+    emailVerificationExpires: { type: Date, select: false, default: null },
     dateOfBirth: { type: Date, default: null },
     passwordResetToken: { type: String, select: false, default: null },
     passwordResetExpires: { type: Date, select: false, default: null },
+
+    // Free-form per-user preferences (notification toggles, UI prefs, etc).
+    // Whole-object replace on update — see userService.updateSettings.
+    settings: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
 
     bio: {
       type: String,
@@ -108,6 +124,9 @@ userSchema.methods.toSafeObject = function () {
   delete obj.refreshToken;
   delete obj.passwordResetToken;
   delete obj.passwordResetExpires;
+  delete obj.emailVerificationToken;
+  delete obj.emailVerificationExpires;
+  delete obj.avatarPublicId;
   delete obj.fcmTokens;
   delete obj.__v;
   return obj;

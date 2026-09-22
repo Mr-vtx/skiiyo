@@ -32,3 +32,21 @@ export const deleteImage = async (publicId) => {
   if (!isCloudinaryConfigured()) return null;
   return cloudinary.uploader.destroy(publicId);
 };
+
+// For files received in-memory (e.g. from @fastify/multipart's toBuffer()),
+// where there's no filesystem path to hand to uploadImage.
+export const uploadImageBuffer = async (buffer, folder = "uploads") => {
+  if (!isCloudinaryConfigured()) return null;
+
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "image",
+        transformation: [{ quality: "auto", fetch_format: "auto" }],
+      },
+      (err, result) => (err ? reject(err) : resolve(result)),
+    );
+    stream.end(buffer);
+  });
+};

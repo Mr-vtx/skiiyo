@@ -43,6 +43,10 @@ export default async function userRoutes(app) {
     userController.updateSettings,
   );
 
+  // multipart body — no JSON schema, size limit is enforced globally by
+  // the @fastify/multipart config in app.js
+  app.post("/avatar", userController.uploadAvatar);
+
   app.get("/notifications", userController.getNotifications);
   app.patch("/notifications/read", userController.markRead);
   app.delete("/notifications/:id", userController.deleteNotification);

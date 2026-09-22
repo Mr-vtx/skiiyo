@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { Notification } from "../models/Notification.js";
 import { cache, TTL } from "../config/redis.js";
 import { sanitize } from "../utils/validate.js";
+import { uploadImageBuffer, deleteImage } from "../config/cloudinary.js";
 
 export const userService = {
   async getProfile(userId, project) {
@@ -14,15 +15,10 @@ export const userService = {
   },
 
   async updateProfile(userId, project, updates) {
-    const allowed = [
-      "username",
-      "bio",
-      "avatar",
-      "dateOfBirth",
-      "city",
-      "lat",
-      "lng",
-    ];
+    // "avatar" is deliberately not editable here — it's only ever set via
+    // updateAvatar(), so it always points at a real Cloudinary upload
+    // rather than an arbitrary, unvalidated URL string.
+    const allowed = ["username", "bio", "dateOfBirth", "city", "lat", "lng"];
     const clean = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) {
@@ -52,6 +48,32 @@ export const userService = {
     );
     if (!user)
       throw Object.assign(new Error("User not found"), { statusCode: 404 });
+    return user.toSafeObject();
+  },
+
+  async updateAvatar(userId, project, buffer) {
+    const user = await User.findOne({ _id: userId, project }).select(
+      "+avatarPublicId",
+    );
+    if (!user)
+      throw Object.assign(new Error("User not found"), { statusCode: 404 });
+
+    const result = await uploadImageBuffer(buffer, `avatars/${project}`);
+    if (!result) {
+      throw Object.assign(
+        new Error("Image uploads are not configured on this server"),
+        { statusCode: 503 },
+      );
+    }
+
+    const oldPublicId = user.avatarPublicId;
+    user.avatar = result.secure_url;
+    user.avatarPublicId = result.public_id;
+    await user.save({ validateBeforeSave: false });
+
+    // Best-effort cleanup — don't fail the request if this fails.
+    if (oldPublicId) deleteImage(oldPublicId).catch(() => {});
+
     return user.toSafeObject();
   },
 

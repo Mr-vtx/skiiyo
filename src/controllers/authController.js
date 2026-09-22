@@ -83,6 +83,13 @@ export const authController = {
     return success(reply, {}, "Password reset successfully — please sign in");
   },
 
+  // POST /api/v1/auth/verify-email
+  async verifyEmail(request, reply) {
+    const { token } = request.body;
+    await authService.verifyEmail(token, request.project._id);
+    return success(reply, {}, "Email verified successfully");
+  },
+
   // GET /api/v1/auth/me
   async getMe(request, reply) {
     const user = await authService.getMe(request.user.id, request.project._id);

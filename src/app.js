@@ -10,6 +10,7 @@ import multipart from "@fastify/multipart";
 
 import { connectDB } from "./config/dbConfig.js";
 import { connectRedis, getRedis, isRedisConnected } from "./config/redis.js";
+import { initGeoIP } from "./config/geoip.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { resolveProject } from "./middleware/project.js";
 import { ensureDefaultProject } from "./bootstrap/defaultProject.js";
@@ -64,51 +65,41 @@ export async function buildApp() {
   await connectDB();
   await ensureDefaultProject(app.log);
   await connectRedis();
+  await initGeoIP();
 
-app.decorate("authenticate", async (request, reply) => {
-  try {
-    await request.jwtVerify();
-  } catch {
-    return reply.code(401).send({
-      statusCode: 401,
-      error: "Unauthorized",
-      message: "Invalid or expired token",
-    });
-  }
-});
+  app.get("/health", async (request, reply) => {
+    const dbState = mongoose.connection.readyState;
+    const dbConnected = dbState === 1; // 1 = connected
 
-app.get("/health", async (request, reply) => {
-  const dbState = mongoose.connection.readyState;
-  const dbConnected = dbState === 1; // 1 = connected
-
-  let redisConnected = false;
-  if (isRedisConnected()) {
-    try {
-      await getRedis().ping();
-      redisConnected = true;
-    } catch {
-      redisConnected = false;
+    let redisConnected = false;
+    if (isRedisConnected()) {
+      try {
+        await getRedis().ping();
+        redisConnected = true;
+      } catch {
+        redisConnected = false;
+      }
     }
-  }
 
-  // DB is a hard dependency; Redis degrades gracefully (see cache helpers).
-  const healthy = dbConnected;
+    // DB is a hard dependency; Redis degrades gracefully (see cache helpers).
+    const healthy = dbConnected;
 
-  const body = {
-    status: healthy ? "ok" : "unhealthy",
-    uptime: process.uptime(),
-    timestamp: Date.now(),
-    app: process.env.APP_NAME,
-    env: process.env.NODE_ENV,
-    services: {
-      db: dbConnected ? "connected" : "disconnected",
-      redis: redisConnected ? "connected" : "unavailable",
-    },
-  };
+    const body = {
+      status: healthy ? "ok" : "unhealthy",
+      uptime: process.uptime(),
+      timestamp: Date.now(),
+      app: process.env.APP_NAME,
+      env: process.env.NODE_ENV,
+      services: {
+        db: dbConnected ? "connected" : "disconnected",
+        redis: redisConnected ? "connected" : "unavailable",
+      },
+    };
 
-  return reply.code(healthy ? 200 : 503).send(body);
-});
- app.register(
+    return reply.code(healthy ? 200 : 503).send(body);
+  });
+
+  app.register(
     async (api) => {
       api.addHook("onRequest", resolveProject);
 
