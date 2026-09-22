@@ -30,15 +30,17 @@ export const userService = {
     }
 
     if (clean.username) {
+      const usernameLower = clean.username.toLowerCase();
       const exists = await User.findOne({
         project,
-        username: clean.username,
+        usernameLower,
         _id: { $ne: userId },
       });
       if (exists)
         throw Object.assign(new Error("Username already taken"), {
           statusCode: 409,
         });
+      clean.usernameLower = usernameLower;
     }
 
     const user = await User.findOneAndUpdate(
@@ -83,6 +85,8 @@ export const userService = {
       { $set: { settings } },
       { new: true, runValidators: true },
     );
+    if (!user)
+      throw Object.assign(new Error("User not found"), { statusCode: 404 });
     return user.toSafeObject();
   },
 
@@ -106,7 +110,14 @@ export const userService = {
   },
 
   async deleteNotification(userId, notificationId) {
-    await Notification.findOneAndDelete({ _id: notificationId, userId });
+    const deleted = await Notification.findOneAndDelete({
+      _id: notificationId,
+      userId,
+    });
+    if (!deleted)
+      throw Object.assign(new Error("Notification not found"), {
+        statusCode: 404,
+      });
   },
 
   async registerFCMToken(userId, project, token) {

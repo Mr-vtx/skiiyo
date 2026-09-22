@@ -21,6 +21,16 @@ const userSchema = new mongoose.Schema(
         "Username can only contain letters, numbers and underscores",
       ],
     },
+    // Lowercased mirror of `username`, used only for uniqueness checks and
+    // lookups — `username` keeps whatever casing the user chose to display.
+    // Kept in sync via the pre("validate") hook below for document saves;
+    // callers that use findOneAndUpdate (no document hooks) must set it
+    // explicitly — see userService.updateProfile.
+    usernameLower: {
+      type: String,
+      required: true,
+      select: false,
+    },
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -103,11 +113,18 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ country: 1 });
 userSchema.index({ project: 1, email: 1 }, { unique: true });
-userSchema.index({ project: 1, username: 1 }, { unique: true });
+userSchema.index({ project: 1, usernameLower: 1 }, { unique: true });
 userSchema.index(
   { project: 1, googleId: 1 },
   { unique: true, sparse: true }, // sparse: password-only users have no googleId
 );
+
+userSchema.pre("validate", function (next) {
+  if (this.isModified("username") && this.username) {
+    this.usernameLower = this.username.toLowerCase();
+  }
+  next();
+});
 
 userSchema.pre("save", async function () {
   if (!this.isModified("password") || !this.password) return;

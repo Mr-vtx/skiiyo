@@ -12,6 +12,27 @@ const googleClient = process.env.GOOGLE_CLIENT_ID
   ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
   : null;
 
+// Google gives us a display name ("John Doe"), not a handle — and the
+// username schema only allows [a-zA-Z0-9_]. Derive a valid candidate from
+// the email's local part instead, then disambiguate against existing users.
+async function deriveUsername(email, project) {
+  const base = email
+    .split("@")[0]
+    .replace(/[^a-zA-Z0-9_]/g, "")
+    .slice(0, 26) || "user";
+  const padded = base.length >= 4 ? base : `${base}user`.slice(0, 26);
+
+  let candidate = padded;
+  let suffix = 0;
+  while (
+    await User.exists({ project, usernameLower: candidate.toLowerCase() })
+  ) {
+    suffix += 1;
+    candidate = `${padded}${suffix}`.slice(0, 30);
+  }
+  return candidate;
+}
+
 async function verifyGoogleToken(idToken) {
   if (!googleClient) {
     throw Object.assign(
@@ -47,7 +68,6 @@ async function verifyGoogleToken(idToken) {
   return {
     googleId: payload.sub,
     email: payload.email,
-    username: payload.name ?? null,
     avatar: payload.picture ?? null,
   };
 }
@@ -55,11 +75,21 @@ async function verifyGoogleToken(idToken) {
 export const authService = {
   // ==== Register ====================================
   async register({ username, email, password, dateOfBirth, geo, project }) {
+    let dob = null;
+    if (dateOfBirth) {
+      dob = new Date(dateOfBirth);
+      if (Number.isNaN(dob.getTime())) {
+        throw Object.assign(new Error("Invalid date of birth"), {
+          statusCode: 400,
+        });
+      }
+    }
+
     const exists = await User.findOne({
       project,
       $or: [
         { email: email.toLowerCase() },
-        { username: username.toLowerCase() },
+        { usernameLower: username.toLowerCase() },
       ],
     });
 
@@ -75,7 +105,7 @@ export const authService = {
       username,
       email,
       password,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      dateOfBirth: dob,
       ...(geo && {
         country: geo.country,
         city: geo.city,
@@ -179,20 +209,22 @@ export const authService = {
 
   // ==== Google OAuth ====================================
   async googleAuth({ idToken, geo, project }) {
-    const { googleId, email, username, avatar } =
-      await verifyGoogleToken(idToken);
+    const { googleId, email, avatar } = await verifyGoogleToken(idToken);
+    const normalizedEmail = email.toLowerCase();
 
     let user = await User.findOne({
       project,
-      $or: [{ googleId }, { email }],
+      $or: [{ googleId }, { email: normalizedEmail }],
     });
+    const isNewUser = !user;
 
     if (!user) {
+      const username = await deriveUsername(normalizedEmail, project);
       user = await User.create({
         project,
         googleId,
-        email,
-        username: username ?? email.split("@")[0],
+        email: normalizedEmail,
+        username,
         avatar,
         isEmailVerified: true,
         ...(geo && {
@@ -200,10 +232,6 @@ export const authService = {
           city: geo.city,
         }),
       });
-
-      emailService
-        .sendWelcome({ email: user.email, username: user.username })
-        .catch(() => {});
     } else {
       if (!user.googleId) user.googleId = googleId;
       if (avatar && !user.avatar) user.avatar = avatar;
@@ -218,6 +246,12 @@ export const authService = {
 
     user.refreshToken = hashToken(tokens.refreshToken);
     await user.save({ validateBeforeSave: false });
+
+    if (isNewUser) {
+      emailService
+        .sendWelcome({ email: user.email, username: user.username })
+        .catch(() => {});
+    }
 
     return { user: user.toSafeObject(), ...tokens };
   },

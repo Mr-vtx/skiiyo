@@ -17,7 +17,6 @@ export default async function userRoutes(app) {
           properties: {
             username: { type: "string", minLength: 4, maxLength: 30 },
             bio: { type: "string", maxLength: 200, nullable: true },
-            avatar: { type: "string", nullable: true },
             dateOfBirth: { type: "string", nullable: true },
             city: { type: "string", nullable: true },
             lat: { type: "number", nullable: true },

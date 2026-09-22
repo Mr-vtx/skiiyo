@@ -59,6 +59,15 @@ export function errorHandler(error, request, reply) {
       details: messages,
     });
   }
+
+  // ==== Mongoose cast errors (bad ObjectId, bad Date, bad Number, etc) ====
+  if (error.name === "CastError") {
+    return reply.code(400).send({
+      statusCode: 400,
+      error: "Validation Error",
+      message: `Invalid value for "${error.path}"`,
+    });
+  }
   // ==== Known HTTP errors ==============================
   if (error.statusCode) {
     return reply.code(error.statusCode).send({
