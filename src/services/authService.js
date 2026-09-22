@@ -3,6 +3,7 @@
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import User from "../models/User.js";
+import { Notification } from "../models/Notification.js";
 import { generateTokens, verifyRefreshToken } from "../middleware/auth.js";
 import { emailService } from "./emailService.js";
 import { cache } from "../config/redis.js";
@@ -31,6 +32,16 @@ async function deriveUsername(email, project) {
     candidate = `${padded}${suffix}`.slice(0, 30);
   }
   return candidate;
+}
+
+function sendWelcomeNotification(userId) {
+  // Fire-and-forget — a failed notification write shouldn't fail signup.
+  Notification.create({
+    userId,
+    type: "system",
+    title: `Welcome to ${process.env.APP_NAME ?? "the app"}`,
+    body: "Your account has been created — update your profile to get started.",
+  }).catch(() => {});
 }
 
 async function verifyGoogleToken(idToken) {
@@ -132,6 +143,7 @@ export const authService = {
     emailService
       .sendVerification({ email: user.email, username: user.username, verifyToken })
       .catch(() => {});
+    sendWelcomeNotification(user._id);
 
     return { user: user.toSafeObject(), ...tokens };
   },
@@ -251,6 +263,7 @@ export const authService = {
       emailService
         .sendWelcome({ email: user.email, username: user.username })
         .catch(() => {});
+      sendWelcomeNotification(user._id);
     }
 
     return { user: user.toSafeObject(), ...tokens };

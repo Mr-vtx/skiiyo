@@ -3,16 +3,25 @@
 import { Redis } from "@upstash/redis";
 
 let redis;
+let connected = false;
 
 export async function connectRedis() {
   try {
-    redis = new Redis({
+    const client = new Redis({
       url: process.env.UPSTASH_REDIS_REST_URL,
       token: process.env.UPSTASH_REDIS_REST_TOKEN,
     });
-    await redis.ping();
+    await client.ping();
+    redis = client;
+    connected = true;
     console.log("Upstash Redis connected");
   } catch (err) {
+    // Important: don't keep `redis` set to a client whose connection never
+    // actually succeeded — isRedisConnected() must reflect real state, or
+    // every health check (and every cache read) retries against a dead
+    // connection instead of short-circuiting.
+    redis = undefined;
+    connected = false;
     console.error("Redis connection failed:", err.message);
   }
 }
@@ -22,7 +31,7 @@ export function getRedis() {
 }
 
 export function isRedisConnected() {
-  return !!redis;
+  return connected;
 }
 
 // ==== Cache helpers ============================

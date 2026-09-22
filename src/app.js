@@ -74,7 +74,12 @@ export async function buildApp() {
     let redisConnected = false;
     if (isRedisConnected()) {
       try {
-        await getRedis().ping();
+        await Promise.race([
+          getRedis().ping(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Redis ping timeout")), 2000),
+          ),
+        ]);
         redisConnected = true;
       } catch {
         redisConnected = false;

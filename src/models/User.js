@@ -119,11 +119,10 @@ userSchema.index(
   { unique: true, sparse: true }, // sparse: password-only users have no googleId
 );
 
-userSchema.pre("validate", function (next) {
+userSchema.pre("validate", function () {
   if (this.isModified("username") && this.username) {
     this.usernameLower = this.username.toLowerCase();
   }
-  next();
 });
 
 userSchema.pre("save", async function () {
