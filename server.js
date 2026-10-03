@@ -13,8 +13,13 @@ let shuttingDown = false;
 
 async function start() {
   appInstance = await buildApp();
+
   try {
-    await appInstance.listen({ port: PORT, host: HOST });
+    await appInstance.listen({
+      port: PORT,
+      host: HOST,
+    });
+
     appInstance.log.info(`Skiiyo API running on http://${HOST}:${PORT}`);
     appInstance.log.info(`Environment: ${process.env.NODE_ENV}`);
   } catch (err) {

@@ -3,7 +3,7 @@
 const CFG = window.SKIIYO_CONFIG;
 const BASE = CFG.API_BASE_URL.replace(/\/$/, "");
 const HEALTH_URL = BASE.replace(/\/api\/v1$/, "/health");
-
+const API_BASE_URL = window.SKIIYO_CONFIG.API_BASE_URL;
 document.getElementById("baseUrlLabel").textContent = BASE;
 
 // ---- State ----------------------------------------------------------

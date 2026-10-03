@@ -1,5 +1,6 @@
 "use strict";
 
+import "dotenv/config";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -20,11 +21,32 @@ const MIME = {
 
 const server = http.createServer((req, res) => {
   let reqPath = decodeURIComponent(req.url.split("?")[0]);
-  if (reqPath === "/") reqPath = "/index.html";
+
+  if (reqPath === "/config.js") {
+    const config = `
+window.SKIIYO_CONFIG = {
+  API_BASE_URL: ${JSON.stringify(
+    process.env.API_BASE_URL || "http://localhost:8000/api/v1",
+  )},
+  GOOGLE_CLIENT_ID: ${JSON.stringify(process.env.GOOGLE_CLIENT_ID || "")},
+  API_KEY: ${JSON.stringify(process.env.API_KEY || "")}
+};
+`;
+
+    res.writeHead(200, {
+      "Content-Type": "text/javascript; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+
+    return res.end(config);
+  }
+
+  if (reqPath === "/") {
+    reqPath = "/index.html";
+  }
 
   const filePath = path.normalize(path.join(PUBLIC_DIR, reqPath));
 
-  // Prevent path traversal outside /public
   if (!filePath.startsWith(PUBLIC_DIR)) {
     res.writeHead(403);
     return res.end("Forbidden");
@@ -32,16 +54,23 @@ const server = http.createServer((req, res) => {
 
   fs.readFile(filePath, (err, content) => {
     if (err) {
-      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.writeHead(404, {
+        "Content-Type": "text/plain",
+      });
+
       return res.end("Not found");
     }
+
     const ext = path.extname(filePath);
-    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+
+    res.writeHead(200, {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+    });
+
     res.end(content);
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`\nskiiyo console running at http://localhost:${PORT}\n`);
-  console.log(`Edit public/config.js to point it at your backend if needed.\n`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`\nSkiiyo console running on port ${PORT}\n`);
 });
