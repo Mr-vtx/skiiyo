@@ -18,6 +18,8 @@ import { ensureDefaultProject } from "./bootstrap/defaultProject.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/user.js";
 import adminRoutes from "./routes/admin.js";
+import contentRoutes from "./routes/content.js";
+import adminContentRoutes from "./routes/adminContent.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -122,14 +124,30 @@ export async function buildApp() {
       api.register(authRoutes, { prefix: "/auth" });
       api.register(userRoutes, { prefix: "/user" });
       api.register(adminRoutes, { prefix: "/admin" });
+      api.register(contentRoutes, { prefix: "/content" });
+      api.register(adminContentRoutes, { prefix: "/admin/content" });
     },
     { prefix: "/api/v1" },
+  );
+
+  // Fastify rejects an empty body when Content-Type is application/json, which
+  // breaks DELETE and bodyless POSTs from clients that always send the header.
+  // Treat an empty body as "no body"; keep Fastify's prototype-poisoning checks.
+  const parseJson = app.getDefaultJsonParser("error", "error");
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (request, body, done) => {
+      if (body === "") return done(null, undefined);
+      parseJson(request, body, done);
+    },
   );
 
   app.setErrorHandler(errorHandler);
 
   app.setNotFoundHandler((request, reply) => {
     reply.code(404).send({
+      success: false,
       statusCode: 404,
       error: "Not Found",
       message: `Route ${request.method} ${request.url} not found`,

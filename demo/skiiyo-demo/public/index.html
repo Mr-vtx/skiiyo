@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>skiiyo console</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">skiiyo <span>· console</span></div>
+      <div class="status">
+        <span id="healthStatus"><span class="dot"></span>checking…</span>
+        <span id="baseUrlLabel"></span>
+      </div>
+    </header>
+
+    <div class="body">
+      <nav id="nav">
+        <button data-tab="auth" class="active">Auth</button>
+        <button data-tab="profile">Profile</button>
+        <button data-tab="avatar">Avatar</button>
+        <button data-tab="settings">Settings</button>
+        <button data-tab="notifications">Notifications</button>
+        <button data-tab="admin">Admin</button>
+      </nav>
+
+      <main id="main"></main>
+
+      <aside class="logpane">
+        <div class="head">
+          <span>Activity log</span>
+          <button id="clearLog">clear</button>
+        </div>
+        <div class="logstream" id="logstream">
+          <div class="empty">Requests you make will show up here — method, status, latency, and the raw response.</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

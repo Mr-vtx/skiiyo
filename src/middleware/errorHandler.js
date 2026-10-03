@@ -6,6 +6,7 @@ export function errorHandler(error, request, reply) {
   // ==== Validation errors (Fastify schema) ============================
   if (error.validation) {
     return reply.code(400).send({
+      success: false,
       statusCode: 400,
       error: "Validation Error",
       message: error.message,
@@ -16,6 +17,7 @@ export function errorHandler(error, request, reply) {
   // ==== JWT errors ============================
   if (error.code === "FST_JWT_AUTHORIZATION_TOKEN_EXPIRED") {
     return reply.code(401).send({
+      success: false,
       statusCode: 401,
       error: "Token Expired",
       message: "Your session has expired — please sign in again",
@@ -24,6 +26,7 @@ export function errorHandler(error, request, reply) {
 
   if (error.code === "FST_JWT_AUTHORIZATION_TOKEN_INVALID") {
     return reply.code(401).send({
+      success: false,
       statusCode: 401,
       error: "Invalid Token",
       message: "Invalid authentication token",
@@ -33,6 +36,7 @@ export function errorHandler(error, request, reply) {
   // ==== Rate limit ============================
   if (error.statusCode === 429) {
     return reply.code(429).send({
+      success: false,
       statusCode: 429,
       error: "Too Many Requests",
       message: error.message,
@@ -41,8 +45,13 @@ export function errorHandler(error, request, reply) {
 
   // ==== Mongoose duplicate key =============================
   if (error.code === 11000) {
-    const field = Object.keys(error.keyPattern ?? {})[0] ?? "field";
+    // Compound indexes start with "project", which is never the field the user
+    // can change. Report the field that actually collided (email, username...).
+    const keys = Object.keys(error.keyPattern ?? {}).filter((k) => k !== "project");
+    const raw = keys[0] ?? "field";
+    const field = raw === "usernameLower" ? "username" : raw;
     return reply.code(409).send({
+      success: false,
       statusCode: 409,
       error: "Conflict",
       message: `${field} already exists`,
@@ -53,6 +62,7 @@ export function errorHandler(error, request, reply) {
   if (error.name === "ValidationError") {
     const messages = Object.values(error.errors).map((e) => e.message);
     return reply.code(400).send({
+      success: false,
       statusCode: 400,
       error: "Validation Error",
       message: messages[0],
@@ -63,6 +73,7 @@ export function errorHandler(error, request, reply) {
   // ==== Mongoose cast errors (bad ObjectId, bad Date, bad Number, etc) ====
   if (error.name === "CastError") {
     return reply.code(400).send({
+      success: false,
       statusCode: 400,
       error: "Validation Error",
       message: `Invalid value for "${error.path}"`,
@@ -71,6 +82,7 @@ export function errorHandler(error, request, reply) {
   // ==== Known HTTP errors ==============================
   if (error.statusCode) {
     return reply.code(error.statusCode).send({
+      success: false,
       statusCode: error.statusCode,
       error: error.name ?? "Error",
       message: error.message,
@@ -80,6 +92,7 @@ export function errorHandler(error, request, reply) {
   // ==== Unknown errors ==============================
   request.log.error(error);
   return reply.code(500).send({
+      success: false,
     statusCode: 500,
     error: "Internal Server Error",
     message: env === "development" ? error.message : "Something went wrong",

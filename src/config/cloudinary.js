@@ -7,19 +7,26 @@ export const isCloudinaryConfigured = () =>
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET;
 
-if (isCloudinaryConfigured()) {
+// Configure on first use, not at import time. ES module imports run before
+// server.js calls dotenv.config(), so reading process.env at import time sees
+// nothing and Cloudinary throws "Must supply api_key" on every upload.
+let configured = false;
+function configure() {
+  if (configured || !isCloudinaryConfigured()) return;
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
     secure: true,
   });
+  configured = true;
 }
 
 export default cloudinary;
 
 export const uploadImage = async (filePath, folder = "uploads") => {
   if (!isCloudinaryConfigured()) return null;
+  configure();
 
   return cloudinary.uploader.upload(filePath, {
     folder,
@@ -30,6 +37,7 @@ export const uploadImage = async (filePath, folder = "uploads") => {
 
 export const deleteImage = async (publicId) => {
   if (!isCloudinaryConfigured()) return null;
+  configure();
   return cloudinary.uploader.destroy(publicId);
 };
 
@@ -37,6 +45,7 @@ export const deleteImage = async (publicId) => {
 // where there's no filesystem path to hand to uploadImage.
 export const uploadImageBuffer = async (buffer, folder = "uploads") => {
   if (!isCloudinaryConfigured()) return null;
+  configure();
 
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(

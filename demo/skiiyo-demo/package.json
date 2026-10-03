@@ -1,0 +1,10 @@
+{
+  "name": "skiiyo-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reference client console for smoke-testing the skiiyo backend end to end.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

@@ -114,9 +114,17 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ country: 1 });
 userSchema.index({ project: 1, email: 1 }, { unique: true });
 userSchema.index({ project: 1, usernameLower: 1 }, { unique: true });
+// googleId defaults to null, and a compound "sparse" index still indexes a
+// document whenever ANY of its fields exists (project always does), so every
+// password-only user in a project was stored as (project, null) and the second
+// signup collided. A partial index only covers users that really have one.
 userSchema.index(
   { project: 1, googleId: 1 },
-  { unique: true, sparse: true }, // sparse: password-only users have no googleId
+  {
+    name: "project_googleId_partial",
+    unique: true,
+    partialFilterExpression: { googleId: { $type: "string" } },
+  },
 );
 
 userSchema.pre("validate", function () {

@@ -4,3 +4,7 @@ node_modules/
 src/config/geoip/*.mmdb
 dist/
 .DS_Store
+
+.env
+.env.*
+!.env.example

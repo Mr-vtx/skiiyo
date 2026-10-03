@@ -10,24 +10,35 @@ function getResend() {
   return _resend;
 }
 
-const FROM = process.env.EMAIL_FROM ?? "noreply@yourdomain.com";
+const FROM = process.env.EMAIL_FROM ?? "noreply@tymbis.com";
 const APP = process.env.APP_NAME ?? "YourApp";
-const URL = process.env.APP_URL ?? "https://yourdomain.com";
+const URL = process.env.APP_URL ?? "http://localhost:8080";
 
 async function sendEmail({ to, subject, html }) {
   const client = getResend();
 
   if (!client) {
-    console.log("Email service not configured. Skipping email.");
-    return;
+    console.log(`Email not sent (RESEND_API_KEY not set) — to=${to} subject="${subject}"`);
+    return null;
   }
 
-  return client.emails.send({
-    from: FROM,
-    to,
-    subject,
-    html,
-  });
+  let result;
+  try {
+    result = await client.emails.send({ from: FROM, to, subject, html });
+  } catch (err) {
+    console.error(`Email to ${to} threw:`, err.message);
+    return null;
+  }
+
+  if (result?.error) {
+    console.error(
+      `Email to ${to} failed (${result.error.name}):`,
+      result.error.message,
+    );
+    return null;
+  }
+
+  return result;
 }
 
 export const emailService = {
